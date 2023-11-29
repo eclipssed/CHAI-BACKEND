@@ -10,3 +10,22 @@ const storage = multer.diskStorage({
 });
 
 export const upload = multer({ storage: storage });
+
+
+
+
+
+
+
+
+
+
+
+// const storage = multer.storage({
+//   destination:  (req, file, cb) => {
+//     cb(null, '/public/temp')
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, file.originalName)
+//   }
+// })
