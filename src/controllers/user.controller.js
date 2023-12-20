@@ -101,7 +101,7 @@ const loginUser = asyncHandler(async (req, res) => {
   // send cookie
   const { email, userName, password } = req.body;
 
-  if (!userName || !email) {
+  if (!(userName || email)) {
     throw new ApiError(400, "username or email is required.");
   }
 
@@ -112,7 +112,6 @@ const loginUser = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(404, "User doesn't exist");
   }
-
   // const isPasswordCorrect = await User.isPasswordCorrect(password, user.password)
   const isPasswordCorrect = await user.isPasswordCorrect(password);
   if (!isPasswordCorrect) {
@@ -123,9 +122,10 @@ const loginUser = asyncHandler(async (req, res) => {
     user._id
   );
 
-  const loggedInUser = User.findById(user._id).select(
+  const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
+  console.log(loggedInUser);
 
   const options = {
     httpOnly: true,
@@ -150,7 +150,7 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  User.findByIdAndUpdate(
+  await User.findByIdAndUpdate(
     req.user._id,
     {
       $set: { refreshToken: undefined },
@@ -169,4 +169,51 @@ const logoutUser = asyncHandler(async (req, res) => {
     .clearCookie("refreshToken")
     .json(new ApiResponse(200, {}, "User logged out"));
 });
-export { registerUser, loginUser, logoutUser };
+
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const inComingRefreshToken =
+    req.cookies.refreshToken || req.body.refreshToken;
+
+  if (!inComingRefreshToken) {
+    throw new ApiError(401, "unauthorized request.");
+  }
+  try {
+    
+    const decodedToken = jwt.verify(
+      inComingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+  
+    const user = await User.findById(decodedToken?._id);
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token.");
+    }
+    if (inComingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or user.");
+    }
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+    const { accessToken, newRefreshToken } = await generateAccessAndRefreshTokens(
+      user._id
+    );
+  
+    return res
+      .status(201)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
+      .json(
+        200,
+        {
+          accessToken,
+          refreshToken: newRefreshToken,
+        },
+        "Access token refreshed"
+      );
+  } catch (error) {
+    
+  }
+});
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken };
